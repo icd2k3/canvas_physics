@@ -1,6 +1,6 @@
 var physicsDemo = {};  // namespace
 physicsDemo.settings = {
-	imgPath    : '../img/bird.png',
+	imgPath    : 'img/bird.png',
 	fps        : 30,
 	frequency  : 4,
 	maxObjects : 35,
@@ -12,7 +12,8 @@ physicsDemo.settings = {
 // this handles everything outside of b2d including easeljs functionality and visuals
 
 physicsDemo.demo = (function(){
-	var birdDelayCounter = 0;
+	var debug = false,
+		birdDelayCounter = 0;
 
 	// INIT //////////////
 	// setup the basic vars, stage, canvas, etc
@@ -38,10 +39,9 @@ physicsDemo.demo = (function(){
 		var birdBMP          = new createjs.Bitmap(physicsDemo.settings.imgPath);
 		birdBMP.x            = Math.round(Math.random()*physicsDemo.settings.width);
 		birdBMP.y            = -30;
-		birdBMP.regX         = 25;   // it's important to set origin point to center of your bitmap
-		birdBMP.regY         = 25; 
 		birdBMP.snapToPixel  = true;
 		birdBMP.mouseEnabled = false;
+		birdBMP.regX = birdBMP.regY = 25;   // it's important to set origin point to center of your bitmap
 		stage.addChild(birdBMP);
 		return birdBMP;
 	};
@@ -71,8 +71,8 @@ physicsDemo.demo = (function(){
 			$debugCanvas = $('#debugCanvas'),
 			$canvases    = $('canvas');
 		var debugToggle = function() {
-			if(!$debugCanvas.hasClass('show')) { $debugCanvas.addClass('show'); }
-			else { $debugCanvas.removeClass('show'); }
+			if(debug) { $debugCanvas.removeClass('show'); debug = false; }
+			else { $debugCanvas.addClass('show'); debug = true; }
 		};
 		$debugToggle.on('click', debugToggle);
 		$canvases.each(function(){
@@ -84,6 +84,7 @@ physicsDemo.demo = (function(){
 		init: init,
 		tick: tick,
 		bird: bird,
+		debug: function() { return debug; },
 		stage: function() { return stage; }
 	};
 })();
@@ -100,8 +101,8 @@ physicsDemo.b2d = (function(){
 	// important box2d scale and speed vars
 	var SCALE = 30, STEP = 20, TIMESTEP = 1/STEP;
 
-	// common variables used for this demo
-	var world, debugContext,
+	// common variables used for box2d
+	var world,
 		lastTimestamp = Date.now(),
 		fixedTimestepAccumulator = 0,
 		bodiesToRemove = [],
@@ -230,28 +231,30 @@ physicsDemo.b2d = (function(){
 
 			fixedTimestepAccumulator -= STEP;
 			world.ClearForces();
-	   		world.m_debugDraw.m_sprite.graphics.clear();
-	   		world.DrawDebugData();
+			if(physicsDemo.demo.debug()) {
+	   			world.m_debugDraw.m_sprite.graphics.clear();
+	   			world.DrawDebugData();
+	   		}
 	   		if(bodies.length > physicsDemo.settings.maxObjects) {
 	   			bodiesToRemove.push(bodies[0]);
 	   			bodies.splice(0,1);
 	   		}
 		}
-	}
+	};
 
 	// DEBUGGER ////////////
 	// renders shapes of the physics objects so we can see what's going on under the hood
 
 	var addDebug = function() {
-		debugContext = document.getElementById('debugCanvas').getContext('2d');
-		var debugDraw = new b2.debugDraw();
+		var debugContext = document.getElementById('debugCanvas').getContext('2d'),
+			debugDraw    = new b2.debugDraw();
 		debugDraw.SetSprite(debugContext);
 		debugDraw.SetDrawScale(SCALE);
 		debugDraw.SetFillAlpha(0.7);
 		debugDraw.SetLineThickness(1.0);
 		debugDraw.SetFlags(b2.debugDraw.e_shapeBit | b2.debugDraw.e_jointBit);
 		world.SetDebugDraw(debugDraw);
-	}
+	};
 
 	// public objects other parts of the demo can use
 	return {
