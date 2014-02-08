@@ -5,15 +5,14 @@ physicsDemo.settings = {
 	frequency  : 4,
 	maxObjects : 35,
 	width	   : 600,
-	height     : 400
+	height     : 400,
+	debug      : false
 };
 
 // DEMO //////////////
 // this handles everything outside of b2d including easeljs functionality and visuals
 
 physicsDemo.demo = (function(){
-	var debug = false,
-		birdDelayCounter = 0;
 
 	// INIT //////////////
 	// setup the basic vars, stage, canvas, etc
@@ -48,7 +47,7 @@ physicsDemo.demo = (function(){
 
 	// TICK ///////////////
 	// this is the framerate of the app, this is called many times per second, so it should be doing as little as possible
-
+	var birdDelayCounter = 0;
 	var tick = function() {
 		// update the physics simulation and objects in easel stage
 		physicsDemo.b2d.tick();
@@ -63,28 +62,10 @@ physicsDemo.demo = (function(){
 		}
 	};
 
-	// DOM ///////////////
-	// this handles all DOM manipulation, primarilly the hide/show of the debug window and canvas sizing
-
-	var dom = (function() {
-		var $debugToggle = $('#debugToggle'),
-			$debugCanvas = $('#debugCanvas'),
-			$canvases    = $('canvas');
-		var debugToggle = function() {
-			if(debug) { $debugCanvas.removeClass('show'); debug = false; }
-			else { $debugCanvas.addClass('show'); debug = true; }
-		};
-		$debugToggle.on('click', debugToggle);
-		$canvases.each(function(){
-			$(this).attr({'width': physicsDemo.settings.width, 'height': physicsDemo.settings.height});
-		});
-	})();
-
 	return {
 		init: init,
 		tick: tick,
 		bird: bird,
-		debug: function() { return debug; },
 		stage: function() { return stage; }
 	};
 })();
@@ -231,7 +212,7 @@ physicsDemo.b2d = (function(){
 
 			fixedTimestepAccumulator -= STEP;
 			world.ClearForces();
-			if(physicsDemo.demo.debug()) {
+			if(physicsDemo.settings.debug) {
 	   			world.m_debugDraw.m_sprite.graphics.clear();
 	   			world.DrawDebugData();
 	   		}
@@ -263,6 +244,30 @@ physicsDemo.b2d = (function(){
 		createCircle: createCircle,
 		actor: actor
 	};
+})();
+
+// DOM //////////////
+// handles all dom manipulation
+
+physicsDemo.dom = (function(){
+	// toggle debug draw
+	var debug = (function(){
+		var $debugToggle = $('#debugToggle'),
+			$debugCanvas = $('#debugCanvas');
+		var debugToggle = function() {
+			if(physicsDemo.settings.debug) { $debugCanvas.removeClass('show'); physicsDemo.settings.debug = false; }
+			else { $debugCanvas.addClass('show'); physicsDemo.settings.debug = true; }
+		};
+		$debugToggle.on('click', debugToggle);
+	})();
+
+	// set width & height of canvas on initial load
+	var canvasSize = (function(){
+		var $canvases = $('canvas');
+		$canvases.each(function(){
+			$(this).attr({'width': physicsDemo.settings.width, 'height': physicsDemo.settings.height});
+		});
+	})();
 })();
 
 // start the demo
