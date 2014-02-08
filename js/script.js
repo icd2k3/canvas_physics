@@ -1,31 +1,42 @@
-var physicsDemo = {};  // namespace
-physicsDemo.settings = {
-	imgPath    : 'img/bird.png',
-	fps        : 30,
-	frequency  : 4,
-	maxObjects : 35,
-	width	   : 600,
-	height     : 400,
-	debug      : false
+// NAMESPACE / SETTINGS ///////////
+
+var physicsDemo = {
+	settings: {
+		imgPath    : 'img/bird.png',
+		fps        : 30,
+		frequency  : 6,
+		maxObjects : 35,
+		width	   : 600,
+		height     : 400,
+		debug      : false,
+		velocityIterations: 8,
+		positionIterations: 3
+	},
+	events: {
+		TICK: 'TICK',
+		BIRD: 'BIRD',
+		KILL: 'KILL'
+	},
+	$eventDispatcher: $({})
 };
 
 // DEMO //////////////
 // this handles everything outside of b2d including easeljs functionality and visuals
 
-physicsDemo.demo = (function(){
+physicsDemo.demoConstructor = function(){
+	var stage = new createjs.Stage('demoCanvas');
 
 	// INIT //////////////
 	// setup the basic vars, stage, canvas, etc
 
-	var init = function() {
+	this.init = function() {
 		var that = this;
-		stage = new createjs.Stage('demoCanvas');
-		stage.snapPixelsEnabled = true;
-
 		// setup the easeljs ticker (animation frame rate)
 		createjs.Ticker.setFPS(physicsDemo.settings.fps);
 		createjs.Ticker.useRAF = true;
-		createjs.Ticker.addEventListener('tick', function(){ that.tick(); });
+		createjs.Ticker.addEventListener('tick', function(){
+			that.tick();
+		});
 
 		// init box2d world
 		physicsDemo.b2d.init();
@@ -34,7 +45,7 @@ physicsDemo.demo = (function(){
 	// BIRD /////////////
 	// creates an easeljs bitmap bird instance
 
-	var bird = function() {
+	this.bird = function() {
 		var birdBMP          = new createjs.Bitmap(physicsDemo.settings.imgPath);
 		birdBMP.x            = Math.round(Math.random()*physicsDemo.settings.width);
 		birdBMP.y            = -30;
@@ -48,27 +59,27 @@ physicsDemo.demo = (function(){
 	// TICK ///////////////
 	// this is the framerate of the app, this is called many times per second, so it should be doing as little as possible
 	var birdDelayCounter = 0;
-	var tick = function() {
+	this.tick = function() {
 		// update the physics simulation and objects in easel stage
-		physicsDemo.b2d.tick();
+		physicsDemo.$eventDispatcher.trigger(physicsDemo.events.TICK);
 		stage.update();
 
 		// spawn another bird every so often
 		birdDelayCounter++;
 		if(birdDelayCounter % physicsDemo.settings.frequency === 0) {  // delay so it doesn't spawn a bird on every frame (that would just be bananas)
+			//console.log(this);
 			birdDelayCounter = 0;
 			var bird = this.bird();
-			physicsDemo.b2d.createCircle({actor: bird});
+			physicsDemo.$eventDispatcher.trigger(physicsDemo.events.BIRD, [bird]);
 		}
 	};
 
-	return {
-		init: init,
-		tick: tick,
-		bird: bird,
-		stage: function() { return stage; }
-	};
-})();
+	// EVENTS ///////////
+	physicsDemo.$eventDispatcher.on(physicsDemo.events.KILL, function(evt, bitmap) {
+		// remove bitmap from screen when called
+		stage.removeChild(bitmap);
+	});
+};
 
 // B2D //////////////
 /*
@@ -78,7 +89,7 @@ I reccomend creating helper functions for things like boxes, circles, etc
 for this demo, however, I'm just keeping it simple and writing it all out
 */
 
-physicsDemo.b2d = (function(){
+physicsDemo.b2dConstructor = function(){
 	// important box2d scale and speed vars
 	var SCALE = 30, STEP = 20, TIMESTEP = 1/STEP;
 
@@ -86,7 +97,6 @@ physicsDemo.b2d = (function(){
 	var world,
 		lastTimestamp = Date.now(),
 		fixedTimestepAccumulator = 0,
-		bodiesToRemove = [],
 		actors = [],
 		bodies = [];
 
@@ -106,7 +116,7 @@ physicsDemo.b2d = (function(){
 	// INIT //////////////
 	// setup the b2d world and edge boundaries for objects
 
-	var init = function() {
+	this.init = function() {
 		// setup the world and all boundaries
 		world = new b2.world(new b2.vec2(0,10), true);
 		addDebug();
@@ -146,23 +156,23 @@ physicsDemo.b2d = (function(){
 	// CREATE /////////////
 	// module for creating different b2d shapes with the option of attaching an actor (a bitmap to follow the physics object around)
 
-	var createCircle = function(options) {
+	this.createCircle = function(bitmap) {
 		var circleFixture = new b2.fixtureDef;
 		circleFixture.density = 1;
 		circleFixture.restitution = 0.1;
 		circleFixture.shape = new b2.circleShape(24 / SCALE);
 		var circleBodyDef = new b2.bodyDef;
 		circleBodyDef.type = b2.body.b2_dynamicBody;
-		if(options && options.actor) {
-			circleBodyDef.position.x = options.actor.x / SCALE;
-			circleBodyDef.position.y = options.actor.y / SCALE;
+		if(bitmap) {
+			circleBodyDef.position.x = bitmap.x / SCALE;
+			circleBodyDef.position.y = bitmap.y / SCALE;
 		}
 		var circle = world.CreateBody(circleBodyDef);
 		circle.CreateFixture(circleFixture);
 
 		// assign actor
-		if(options && options.actor) {
-			var actor = new this.actor(circle, options.actor);
+		if(bitmap) {
+			var actor = new this.actor(circle, bitmap);
 			actors.push(actor);
 			circle.SetUserData(actor);  // set the actor as user data of the body so we can use it later: body.GetUserData()
 		}
@@ -172,17 +182,21 @@ physicsDemo.b2d = (function(){
 	// ACTOR //////////////
 	// This attaches a bitmap (or any object of your choice) to the b2d physics object.
 
-	var actor = function(body, actor) {
+	this.actor = function(body, bitmap) {
 		this.body = body;
-		this.actor = actor;
+		this.bitmap = bitmap;
 		this.tick = function() {  // translate box2d positions to pixels
-			this.actor.rotation = this.body.GetAngle() * (57.295);  // 180 / PI
-			this.actor.x = this.body.GetWorldCenter().x * SCALE;
-			this.actor.y = this.body.GetWorldCenter().y * SCALE;
+			var worldCenter = this.body.GetWorldCenter();
+			this.bitmap.rotation = this.body.GetAngle() * 57.295;  // 180 / PI
+			this.bitmap.x = worldCenter.x * SCALE;
+			this.bitmap.y = worldCenter.y * SCALE;
 		};
 		this.remove = function() {
-			physicsDemo.demo.stage().removeChild(actor);
+			physicsDemo.$eventDispatcher.trigger(physicsDemo.events.KILL, this.bitmap);
+			//physicsDemo.demo.stage().removeChild(this.bitmap);
 			actors.splice(actors.indexOf(this), 1);
+			delete this.body;
+			delete this.bitmap;
 		};
 		return this;
 	};
@@ -191,7 +205,7 @@ physicsDemo.b2d = (function(){
 	// Box2d update function. This is called many times per second from the easeljs ticker, so it's best to keep as simple as possible.
 	// The tricky thing to note here is that delta time is used to avoid inconsistencies in simulation if frame rate drops in easeljs
 
-	var tick = function() {
+	this.tick = function() {
 		var now = Date.now(),
 			dt  = now - lastTimestamp;
 		fixedTimestepAccumulator += dt;
@@ -201,24 +215,18 @@ physicsDemo.b2d = (function(){
 			for(var i=0, l=actors.length; i<l; i++) { actors[i].tick(); }
 
 			// remove bodies before world timestep
-			for(var i=0, l=bodiesToRemove.length; i<l; i++) {
-				bodiesToRemove[i].GetUserData().remove();
-				bodiesToRemove[i].SetUserData(null);
-				world.DestroyBody(bodiesToRemove[i]);
-			}
-			bodiesToRemove = [];
+			if(bodies.length > physicsDemo.settings.maxObjects) {
+	   			bodies[0].GetUserData().remove();
+	   			world.DestroyBody(bodies[0]);
+	   			bodies.splice(0,1);
+	   		}
 
-			world.Step(TIMESTEP, 10, 10);
+			world.Step(TIMESTEP, physicsDemo.settings.velocityIterations, physicsDemo.settings.positionIterations);
 
 			fixedTimestepAccumulator -= STEP;
-			world.ClearForces();
 			if(physicsDemo.settings.debug) {
 	   			world.m_debugDraw.m_sprite.graphics.clear();
 	   			world.DrawDebugData();
-	   		}
-	   		if(bodies.length > physicsDemo.settings.maxObjects) {
-	   			bodiesToRemove.push(bodies[0]);
-	   			bodies.splice(0,1);
 	   		}
 		}
 	};
@@ -237,14 +245,13 @@ physicsDemo.b2d = (function(){
 		world.SetDebugDraw(debugDraw);
 	};
 
-	// public objects other parts of the demo can use
-	return {
-		init: init,
-		tick: tick,
-		createCircle: createCircle,
-		actor: actor
-	};
-})();
+	// EVENTS
+	var that = this;
+	physicsDemo.$eventDispatcher.on(physicsDemo.events.TICK, this.tick);
+	physicsDemo.$eventDispatcher.on(physicsDemo.events.BIRD, function(evt, bitmap) {
+		that.createCircle(bitmap);
+	});
+};
 
 // DOM //////////////
 // handles all dom manipulation
@@ -270,5 +277,9 @@ physicsDemo.dom = (function(){
 	})();
 })();
 
-// start the demo
+// INIT ////////////////////////
+
+physicsDemo.b2d = new physicsDemo.b2dConstructor();
+physicsDemo.demo = new physicsDemo.demoConstructor();
+physicsDemo.b2d.init();
 physicsDemo.demo.init();
