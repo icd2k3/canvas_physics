@@ -1,4 +1,4 @@
-This is a simple example of how to combine Box2dWeb with EaselJS to create rich, physics based, animation in the HTML5 Canvas tag. This is the basic underlying technique behind the http://www.luxahoy.com html5 game.
+This is a simple example of how to combine Box2dWeb with EaselJS to create rich, physics based, animation in the HTML5 Canvas tag. This is the basic underlying technique behind the web game http://www.luxahoy.com.
 
 Example: http://justin-schrader.com/stuff/canvas_physics/
 
